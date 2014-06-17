@@ -45,11 +45,14 @@ public class ApiConstructs {
 	public static final String BUILDER_CLASS_NAME = "Builder";
 	public static final String BUILDER_INTERFACE_NAME = "BuildSupport";
 	public static final String BUILD_METHOD_NAME = "build";
+	public static final String RESULT_METHOD_NAME = "result";
 	public static final String BUILDER_METHOD_NAME = "builder";
+	public static final String NEW_BUILDER_METHOD_NAME = "newBuilder";
 	public static final String INIT_METHOD_NAME = "init";
 	public static final String PRODUCT_INSTANCE_NAME = "product";
 	public static final String ADD_METHOD_PREFIX = "add";
 	public static final String WITH_METHOD_PREFIX = "with";
+	public static final String SET_METHOD_PREFIX = "set";
 	public static final String AS_LIST = "asList";
 	public static final String UNMODIFIABLE_LIST = "unmodifiableList";
 	public static final String ADD_ALL = "addAll";

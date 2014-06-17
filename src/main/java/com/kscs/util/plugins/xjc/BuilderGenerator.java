@@ -121,11 +121,19 @@ public class BuilderGenerator {
 		final BuilderOutline childBuilderOutline = getBuilderDeclaration(fieldType);
 		if (childBuilderOutline == null) {
 			final JMethod withMethod = this.builderClass.method(JMod.PUBLIC, this.builderType, ApiConstructs.WITH_METHOD_PREFIX + propertyName);
-			final JVar param = withMethod.param(JMod.FINAL, fieldType, fieldName);
+			final JVar withMethodParam = withMethod.param(JMod.FINAL, fieldType, fieldName);
+			
+			final JMethod setMethod = this.builderClass.method(JMod.PUBLIC, this.builderType, ApiConstructs.SET_METHOD_PREFIX + propertyName);
+			final JVar setMethodParam = setMethod.param(JMod.FINAL, fieldType, fieldName);
+			
 			if (this.implement) {
 				final JFieldVar builderField = this.builderClass.field(JMod.PRIVATE, fieldType, fieldName);
-				withMethod.body().assign(JExpr._this().ref(builderField), param);
+				withMethod.body().assign(JExpr._this().ref(builderField), withMethodParam);
 				withMethod.body()._return(JExpr._this());
+				
+				setMethod.body().assign(JExpr._this().ref(builderField), setMethodParam);
+				setMethod.body()._return(JExpr._this());
+				
 				initBody.assign(productParam.ref(fieldName), JExpr._this().ref(builderField));
 			}
 		} else {
@@ -134,14 +142,22 @@ public class BuilderGenerator {
 			final JClass builderWithMethodReturnType = childBuilderOutline.getDefinedBuilderClass().narrow(this.builderClass.narrow(this.parentBuilderTypeParam).wildcard());
 
 			final JMethod withValueMethod = this.builderClass.method(JMod.PUBLIC, this.builderType, ApiConstructs.WITH_METHOD_PREFIX + propertyName);
-			final JVar param = withValueMethod.param(JMod.FINAL, elementType, fieldName);
+			final JVar withValueParam = withValueMethod.param(JMod.FINAL, elementType, fieldName);
 			final JMethod withBuilderMethod = this.builderClass.method(JMod.PUBLIC, builderWithMethodReturnType, ApiConstructs.WITH_METHOD_PREFIX + propertyName);
+
+			final JMethod setValueMethod = this.builderClass.method(JMod.PUBLIC, this.builderType, ApiConstructs.SET_METHOD_PREFIX + propertyName);
+			final JVar setValueParam = setValueMethod.param(JMod.FINAL, elementType, fieldName);
+			final JMethod setBuilderMethod = this.builderClass.method(JMod.PUBLIC, builderWithMethodReturnType, ApiConstructs.SET_METHOD_PREFIX + propertyName);
 
 			if (this.implement) {
 				final JFieldVar builderField = this.builderClass.field(JMod.PRIVATE, builderFieldElementType, fieldName);
-				withValueMethod.body().assign(JExpr._this().ref(builderField), nullSafe(param, JExpr._new(builderFieldElementType).arg(JExpr._this()).arg(param).arg(JExpr.FALSE)));
+				withValueMethod.body().assign(JExpr._this().ref(builderField), nullSafe(withValueParam, JExpr._new(builderFieldElementType).arg(JExpr._this()).arg(withValueParam).arg(JExpr.FALSE)));
 				withValueMethod.body()._return(JExpr._this());
 				withBuilderMethod.body()._return(JExpr._this().ref(builderField).assign(JExpr._new(builderFieldElementType).arg(JExpr._this()).arg(JExpr._null()).arg(JExpr.FALSE)));
+
+        setValueMethod.body().assign(JExpr._this().ref(builderField), nullSafe(setValueParam, JExpr._new(builderFieldElementType).arg(JExpr._this()).arg(setValueParam).arg(JExpr.FALSE)));
+				setValueMethod.body()._return(JExpr._this());
+				setBuilderMethod.body()._return(JExpr._this().ref(builderField).assign(JExpr._new(builderFieldElementType).arg(JExpr._this()).arg(JExpr._null()).arg(JExpr.FALSE)));
 
 				initBody.assign(productParam.ref(fieldName), nullSafe(JExpr._this().ref(builderField), JExpr._this().ref(builderField).invoke(ApiConstructs.BUILD_METHOD_NAME)));
 			}
@@ -335,8 +351,8 @@ public class BuilderGenerator {
 		}
 	}
 
-	protected JMethod generateBuildMethod(final JMethod initMethod) {
-		final JMethod buildMethod = this.builderClass.method(JMod.PUBLIC, this.definedClass, ApiConstructs.BUILD_METHOD_NAME);
+	protected JMethod generateBuildMethod(final JMethod initMethod, final String methodName) {
+		final JMethod buildMethod = this.builderClass.method(JMod.PUBLIC, this.definedClass, methodName);
 		if(this.implement) {
 			if (this.definedClass.isAbstract()) {
 				buildMethod.body()._return(JExpr.cast(this.definedClass, JExpr._this().ref("_product")));
@@ -349,10 +365,14 @@ public class BuilderGenerator {
 		return buildMethod;
 	}
 
-	protected JMethod generateBuilderMethod() {
-		final JMethod builderMethod = this.definedClass.method(JMod.PUBLIC | JMod.STATIC, this.builderClass.narrow(Void.class), ApiConstructs.BUILDER_METHOD_NAME);
+	protected JMethod generateBuilderMethod(final String methodName) {
+		final JMethod builderMethod = this.definedClass.method(JMod.PUBLIC | JMod.STATIC, this.builderClass.narrow(Void.class), methodName);
 		builderMethod.body()._return(JExpr._new(this.builderClass.narrow(Void.class)).arg(JExpr._null()).arg(JExpr._null()).arg(JExpr.FALSE));
 
+		return builderMethod;
+	}
+	
+	protected JMethod generateCopyMethod() {
 		final JMethod copyOfMethod = this.definedClass.method(JMod.PUBLIC | JMod.STATIC, this.builderClass.narrow(Void.class), "copyOf");
 		final JVar otherParam = copyOfMethod.param(JMod.FINAL, this.definedClass, "other");
 		copyOfMethod.body()._return(JExpr._new((this.builderClass.narrow(Void.class))).arg(JExpr._null()).arg(otherParam).arg(JExpr.TRUE));
@@ -363,7 +383,7 @@ public class BuilderGenerator {
 			final JVar propertyPathParam = partialCopyOfMethod.param(JMod.FINAL, this.apiConstructs.codeModel.ref(PropertyPath.class), "propertyPath");
 			partialCopyOfMethod.body()._return(JExpr._new((this.builderClass.narrow(Void.class))).arg(JExpr._null()).arg(partialOtherParam).arg(JExpr.TRUE).arg(propertyPathParam));
 		}
-		return builderMethod;
+		return copyOfMethod;
 	}
 
 	final void generateCopyConstructor() {
@@ -622,9 +642,12 @@ public class BuilderGenerator {
 		}
 
 		generateImplementsClause();
-		generateBuildMethod(initMethod);
+		generateBuildMethod(initMethod, ApiConstructs.BUILD_METHOD_NAME);
+		generateBuildMethod(initMethod, ApiConstructs.RESULT_METHOD_NAME);
 		if (this.implement && !this.definedClass.isAbstract()) {
-			generateBuilderMethod();
+			generateBuilderMethod(ApiConstructs.BUILDER_METHOD_NAME);
+			generateBuilderMethod(ApiConstructs.NEW_BUILDER_METHOD_NAME);
+			generateCopyMethod();
 		}
 
 	}
